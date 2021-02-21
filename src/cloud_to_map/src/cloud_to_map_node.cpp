@@ -6,6 +6,7 @@
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <nav_msgs/OccupancyGrid.h>
+#include <sensor_msgs/PointCloud2.h>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -24,7 +25,7 @@ typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
 typedef pcl::PointCloud<pcl::Normal> NormalCloud;
 
 /* Global */
-PointCloud::ConstPtr currentPC;
+PointCloud::Ptr currentPC(new PointCloud);  //TODO: pcl2
 bool newPointCloud = false;
 bool reconfig = false;
 
@@ -57,10 +58,12 @@ void loadDefaults(ros::NodeHandle& nh) {
 // ------------------------------------------------------
 // -----Update current PointCloud if msg is received-----
 // ------------------------------------------------------
-void callback(const PointCloud::ConstPtr& msg) {
+void callback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
   boost::unique_lock<boost::mutex>(mutex);
-  currentPC = msg;
+  pcl::fromROSMsg(*msg, *currentPC);
+  //currentPC = msg;
   newPointCloud = true;
+  std::cout << "callback loool\n";
 }
 
 // ------------------------------------------
@@ -77,12 +80,13 @@ void callbackReconfig(cloud_to_map::cloud_to_map_nodeConfig &config, uint32_t le
   param.loopRate = config.loop_rate;
   param.cellResolution = config.cell_resolution;
   reconfig = true;
+  std::cout << "LOOOL\n";
 }
 
 // ----------------------------------------------------------------
 // -----Calculate surface normals with a search radius of 0.05-----
 // ----------------------------------------------------------------
-void calcSurfaceNormals(PointCloud::ConstPtr& cloud, pcl::PointCloud<pcl::Normal>::Ptr normals) {
+void calcSurfaceNormals(PointCloud::Ptr& cloud, pcl::PointCloud<pcl::Normal>::Ptr normals) {
   pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
   ne.setInputCloud(cloud);
   pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>());
@@ -197,8 +201,10 @@ int main(int argc, char** argv) {
   /* Initialize ROS */
   ros::init(argc, argv, "cloud_to_map_node");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe<PointCloud>("/rtabmap/cloud_map", 1, callback);
+  ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/output_cloud", 1, callback);
   ros::Publisher pub = nh.advertise<nav_msgs::OccupancyGrid>("grid", 1);
+
+  // currentPC = new pcl::PointCloud<pcl::PointXYZRGB>;
 
   /* Initialize Dynamic Reconfigure */
   dynamic_reconfigure::Server<cloud_to_map::cloud_to_map_nodeConfig> server;
